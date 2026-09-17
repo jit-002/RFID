@@ -1,0 +1,38 @@
+{
+  "RFID-E0000000": {
+    "id": "std-001",
+    "name": "Jit Das",
+    "role": "STUDENT",
+    "classOrDept": "Class 12-Science",
+    "rollNo": "01",
+    "email": "jit.das@pvmlumding.edu",
+    "phone": "+91 94350 12345"
+  },
+  "RFID-STF-ASISGH": {
+    "id": "stf-001",
+    "name": "Asis Ghosh",
+    "role": "STAFF",
+    "classOrDept": "Vice Principal & Physics",
+    "rollNo": "N/A",
+    "email": "asis.ghosh@pvmlumding.com",
+    "phone": "+91 94350 23456"
+  },
+  "RFID-OPS-BIKASH": {
+    "id": "emp-001",
+    "name": "Bikash Chanda",
+    "role": "EMPLOYEE",
+    "classOrDept": "Campus Security & IoT Operations",
+    "rollNo": "N/A",
+    "email": "bikash.chanda@pvmlumding.edu",
+    "phone": "+91 94350 34567"
+  },
+  "RFID-PRIYAS-01": {
+    "id": "std-test-99",
+    "name": "Priya Sen",
+    "role": "STUDENT",
+    "classOrDept": "Class 12-Science",
+    "rollNo": "01",
+    "email": "priya.sen@pvmlumding.edu",
+    "phone": "+91 94350 99999"
+  }
+}

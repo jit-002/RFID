@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Plus Jakarta Sans', 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Monaco, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #06090e;
+  color: #f3f4f6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Apple & Linear Thin Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Tactile instantaneous button response (<16ms feedback) */
+button, [role="button"] {
+  touch-action: manipulation;
+  user-select: none;
+}
+button:active, [role="button"]:active {
+  transform: scale(0.98);
+  transition: transform 60ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Linear & Vercel Minimal Surfaces */
+.surface-card {
+  background: #0d121d;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 1.25rem;
+}
+
+.surface-card-subtle {
+  background: #090e18;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 1rem;
+}
+
+.surface-card-interactive {
+  background: #0d121d;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 1.25rem;
+  transition: border-color 0.2s ease, transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.2s ease;
+}
+.surface-card-interactive:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: #111726;
+}
+
+/* Subtle dot grid for clean depth without clutter */
+.bg-subtle-dots {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* SVG Line Draw Animation */
+@keyframes drawPath {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.animate-draw-path {
+  animation: drawPath 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}

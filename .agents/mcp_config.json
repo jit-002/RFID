@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "21st": {
+      "url": "https://21st.dev/api/mcp",
+      "serverUrl": "https://21st.dev/api/mcp",
+      "headers": {
+        "x-api-key": "21st_sk_a02546e9065edfd22806def0c54f532e73df15595104b50cd5648f82bc4c7d57"
+      }
+    },
+    "motionsites": {
+      "url": "https://xgdzyqfalbibzelpdpvr.supabase.co/functions/v1/mcp",
+      "serverUrl": "https://xgdzyqfalbibzelpdpvr.supabase.co/functions/v1/mcp"
+    }
+  }
+}
