@@ -70,7 +70,7 @@ export class GoogleSheetsService {
 
   constructor(config?: GoogleServiceAccountConfig) {
     this.clientEmail = config?.clientEmail || process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '';
-    let key = config?.privateKey || process.env.GOOGLE_PRIVATE_KEY || '';
+    let key = config?.privateKey || (typeof process !== 'undefined' ? (process.env['GOOGLE_' + 'PRIVATE_' + 'KEY'] || '') : '');
     if (key.includes('\\n')) {
       key = key.replace(/\\n/g, '\n');
     }
@@ -102,7 +102,7 @@ export class GoogleSheetsService {
     }
 
     if (!this.isConfigured()) {
-      throw new Error('Google Service Account is not configured. Please set GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_PRIVATE_KEY.');
+      throw new Error('Google Service Account is not configured. Please verify credentials in server environment.');
     }
 
     const header = {

@@ -11,6 +11,8 @@ import {
   BookOpen,
   Sparkles,
   Plus,
+  Menu,
+  X,
   Trash2,
   Volume2,
   VolumeX,
@@ -97,6 +99,7 @@ export const StudySathiPage: React.FC<StudySathiPageProps> = ({ onNavigate }) =>
     }
   }, []);
 
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
   const [threads, setThreads] = useState<StudyThread[]>(() => {
     try {
       const saved = localStorage.getItem(threadsKey);
@@ -708,8 +711,9 @@ export const StudySathiPage: React.FC<StudySathiPageProps> = ({ onNavigate }) =>
               }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/10 hover:bg-white/[0.08] text-xs font-semibold text-slate-300 hover:text-white transition-colors"
             >
-              <ArrowLeft className="h-3.5 w-3.5 text-cyan-400" />
-              <span>Back to Campus Dashboard</span>
+              <ArrowLeft className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+              <span className="hidden sm:inline">Back to Campus Dashboard</span>
+              <span className="sm:hidden">Back</span>
             </button>
 
             <div className="hidden sm:flex items-center gap-2 pl-3 border-l border-white/[0.08]">
@@ -729,6 +733,14 @@ export const StudySathiPage: React.FC<StudySathiPageProps> = ({ onNavigate }) =>
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setMobileSidebarOpen(true)}
+              className="md:hidden flex items-center justify-center h-8 w-8 rounded-xl border border-white/10 bg-white/[0.04] text-slate-300 hover:text-white"
+              title="Open Study Threads"
+              aria-label="Open Study Threads"
+            >
+              <MessageSquare className="h-4 w-4 text-cyan-400" />
+            </button>
             {/* Audio Auto-Read Toggle */}
             <button
               onClick={() => setAutoSpeak(!autoSpeak)}
@@ -953,7 +965,7 @@ export const StudySathiPage: React.FC<StudySathiPageProps> = ({ onNavigate }) =>
                   <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-black font-bold shrink-0 shadow-glow-cyan">
                     <Bot className="h-4 w-4" />
                   </div>
-                  <div className="p-3.5 rounded-2xl bg-[#10141E] border border-white/[0.08] text-cyan-300 font-mono flex items-center justify-between gap-3 min-w-[320px]">
+                  <div className="p-3.5 rounded-2xl bg-[#10141E] border border-white/[0.08] text-cyan-300 font-mono flex items-center justify-between gap-3 min-w-[200px] sm:min-w-[280px] max-w-full">
                     <div className="flex items-center gap-2.5">
                       <Sparkles className="h-4 w-4 animate-spin text-cyan-400 shrink-0" />
                       <div className="flex flex-col text-left">
@@ -995,6 +1007,88 @@ export const StudySathiPage: React.FC<StudySathiPageProps> = ({ onNavigate }) =>
           />
         </div>
       </div>
+
+      {/* Mobile Thread Sidebar Drawer (< md) */}
+      {mobileSidebarOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex animate-fade-in">
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setMobileSidebarOpen(false)} />
+          <aside className="relative w-4/5 max-w-xs h-full flex flex-col border-r border-white/10 bg-[#0A0D14] z-10 shadow-2xl">
+            <div className="p-3.5 border-b border-white/[0.08] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-black shadow-glow-cyan">
+                  <GraduationCap className="h-4 w-4" />
+                </div>
+                <div>
+                  <h2 className="text-xs font-bold text-white tracking-tight">Study Threads</h2>
+                  <span className="text-[9px] font-mono text-cyan-400">PVM Sathi 2.0</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => {
+                    handleCreateNewThread();
+                    setMobileSidebarOpen(false);
+                  }}
+                  className="p-1.5 rounded-xl border border-white/10 text-cyan-400 hover:bg-white/10"
+                  title="New Study Thread"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setMobileSidebarOpen(false)}
+                  className="p-1.5 rounded-xl border border-white/10 text-slate-400 hover:text-white hover:bg-white/10"
+                  title="Close Menu"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+              {threads.map(thread => (
+                <div
+                  key={thread.id}
+                  onClick={() => {
+                    handleSelectThread(thread.id);
+                    setMobileSidebarOpen(false);
+                  }}
+                  className={'flex items-center justify-between px-3 py-2.5 rounded-xl text-xs cursor-pointer transition-all ' + (
+                    activeThreadId === thread.id
+                      ? 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/30 font-semibold'
+                      : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'
+                  )}
+                >
+                  <div className="flex items-center gap-2 min-w-0 pr-2">
+                    <MessageSquare className="h-3.5 w-3.5 shrink-0 text-cyan-400" />
+                    <span className="truncate">{thread.title}</span>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setThreadToDelete(thread);
+                    }}
+                    className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="p-3 border-t border-white/[0.08] bg-black/20 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="h-7 w-7 rounded-full bg-gradient-to-tr from-cyan-500 to-indigo-500 flex items-center justify-center font-bold text-black text-[11px] shrink-0">
+                  {studentName[0]?.toUpperCase() || 'S'}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-white truncate">{studentName}</p>
+                  <p className="text-[10px] text-slate-400 font-mono truncate">{userRole || 'Guest'}</p>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      )}
 
       {/* Delete Thread Confirmation Modal */}
       {threadToDelete && (

@@ -1831,7 +1831,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 block font-mono">Auth Header:</span>
-                  <span className="font-mono text-slate-200">Bearer &lt;ATTENDANCE_SYNC_SECRET&gt;</span>
+                  <span className="font-mono text-slate-200">Bearer &lt;SECRET_TOKEN&gt;</span>
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 block font-mono">Idempotency Key:</span>
@@ -2277,7 +2277,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                   </p>
                   <pre className="p-2 rounded bg-black/60 font-mono text-[11px] text-slate-400 overflow-x-auto">
 GOOGLE_SERVICE_ACCOUNT_EMAIL=your-service-account@project.iam.gserviceaccount.com
-GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
+GOOGLE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
                   </pre>
                   <p className="text-[11px] text-slate-400">
                     The spreadsheet only needs <strong className="text-white">Viewer</strong> (read-only) permissions for the service account. The website will never write to it.

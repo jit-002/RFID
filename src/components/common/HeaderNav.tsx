@@ -287,7 +287,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
 
           {/* User Account / Auth Control */}
           {isAuthenticated && roleInfo ? (
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="hidden sm:flex items-center gap-1.5 shrink-0">
               <button
                 onClick={() => navigateTo(roleInfo.portalTab)}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-semibold ${roleInfo.badgeColor} whitespace-nowrap hover:opacity-90 transition-opacity`}

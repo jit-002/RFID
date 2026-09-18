@@ -508,12 +508,12 @@ export const ClaudeChatInput: React.FC<ChatInputProps> = ({
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/10 bg-black/40 hover:bg-white/[0.06] text-xs font-semibold text-slate-300 hover:text-white transition-colors"
               >
                 <Sparkles className="h-3 w-3 text-cyan-400" />
-                <span className="truncate max-w-[130px]">{activeModelObj.name}</span>
+                <span className="truncate max-w-[80px] sm:max-w-[130px]">{activeModelObj.name}</span>
                 <ChevronDown className={cn("h-3 w-3 text-slate-400 transition-transform", isModelDropdownOpen && "rotate-180")} />
               </button>
 
               {isModelDropdownOpen && (
-                <div className="absolute bottom-full right-0 mb-2 w-72 bg-slate-900 border border-white/15 rounded-2xl shadow-2xl p-2 z-50 space-y-1">
+                <div className="absolute bottom-full right-0 mb-2 w-72 max-w-[calc(100vw-24px)] bg-slate-900 border border-white/15 rounded-2xl shadow-2xl p-2 z-50 space-y-1">
                   <div className="px-2.5 py-1 text-[10px] font-mono text-slate-400 uppercase tracking-wider">
                     Select Inference Model
                   </div>

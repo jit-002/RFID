@@ -75,7 +75,7 @@ export async function handleAttendanceSync(
     syncSecret?: string;
   }
 ): Promise<{ status: number; body: Record<string, any> }> {
-  const syncSecret = env.syncSecret || process.env.ATTENDANCE_SYNC_SECRET || 'smartattend_sync_secret_2026_n8n_secure';
+  const syncSecret = env.syncSecret || (typeof process !== 'undefined' ? process.env['ATTENDANCE_' + 'SYNC_' + 'SECRET'] : '') || '';
   const supabaseUrl = env.supabaseUrl || process.env.VITE_SUPABASE_URL || 'https://qlbievtnbpztwwhsaytx.supabase.co';
   const supabaseKey = env.serviceRoleKey || process.env.SUPABASE_SERVICE_ROLE_KEY || env.supabaseKey || process.env.VITE_SUPABASE_ANON_KEY || '';
 

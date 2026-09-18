@@ -21,6 +21,7 @@ export interface StudySathiApiResponse {
   text: string;
   modelUsed?: string;
   error?: string;
+  errorCode?: string;
 }
 
 export interface PvmSathiApiRequest {
@@ -87,12 +88,26 @@ export class SmartXAiApiClient {
         body: JSON.stringify(req)
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
+        let userFacingMessage = data.message || 'Study Sathi is temporarily unavailable.';
+        if (data.errorCode === 'INVALID_API_KEY') {
+          userFacingMessage = 'Study Sathi is not configured correctly. Please contact the administrator.';
+        } else if (data.errorCode === 'RATE_LIMITED') {
+          userFacingMessage = 'Study Sathi is temporarily busy. Retrying with another AI engine...';
+        } else if (data.errorCode === 'NETWORK_ERROR') {
+          userFacingMessage = 'Study Sathi could not reach the AI service. Please check your connection.';
+        } else if (data.errorCode === 'SERVICE_UNAVAILABLE') {
+          userFacingMessage = 'Study Sathi is temporarily unavailable.';
+        } else if (data.error === 'PROVIDER_ERROR' && data.message) {
+          userFacingMessage = data.message;
+        }
+
         return {
           success: false,
-          text: data.message || data.error || 'Study Sathi is temporarily unavailable.',
-          error: data.error
+          text: userFacingMessage,
+          error: userFacingMessage,
+          errorCode: data.errorCode
         };
       }
 
@@ -105,7 +120,8 @@ export class SmartXAiApiClient {
       return {
         success: false,
         text: 'Network error contacting Study Sathi AI. Please check your connection.',
-        error: err.message
+        error: err.message,
+        errorCode: 'NETWORK_ERROR'
       };
     }
   }
@@ -121,12 +137,12 @@ export class SmartXAiApiClient {
         body: JSON.stringify(req)
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
         return {
           success: false,
-          text: data.message || data.error || 'PVM Sathi campus intelligence is temporarily offline.',
-          error: data.error
+          text: data.message || 'PVM Sathi campus intelligence is temporarily offline.',
+          error: data.message || data.error
         };
       }
 
@@ -155,7 +171,7 @@ export class SmartXAiApiClient {
         body: JSON.stringify(req)
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
         return {
           success: false,
@@ -175,6 +191,50 @@ export class SmartXAiApiClient {
         success: false,
         error: err.message || 'Network error reaching image generation service.',
         errorCode: 'NETWORK_ERROR'
+      };
+    }
+  }
+
+  /**
+   * Edit image via Sathi Creative
+   */
+  public static async editImage(req: { image: string; editInstruction: string }): Promise<any> {
+    try {
+      const res = await fetch('/api/sathi-creative/edit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req)
+      });
+
+      const data = await res.json().catch(() => ({}));
+      return data;
+    } catch (err: any) {
+      return {
+        success: false,
+        errorCode: 'IMAGE_EDITING_FAILED',
+        message: 'Image editing failed: ' + err.message
+      };
+    }
+  }
+
+  /**
+   * Analyze image via Sathi Creative Vision
+   */
+  public static async analyzeImage(req: { image: string; query?: string }): Promise<any> {
+    try {
+      const res = await fetch('/api/sathi-creative/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req)
+      });
+
+      const data = await res.json().catch(() => ({}));
+      return data;
+    } catch (err: any) {
+      return {
+        success: false,
+        error: 'SERVER_ERROR',
+        message: err.message || 'Vision analysis failed.'
       };
     }
   }
