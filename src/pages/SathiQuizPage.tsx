@@ -101,25 +101,30 @@ export const SathiQuizPage: React.FC<SathiQuizPageProps> = ({
     });
   }, [students]);
 
-  // Selected student persona for test execution and viewing
-  const [selectedStudentId, setSelectedStudentId] = useState<string>(() => {
-    return currentStudent?.id || currentUser?.id || 'JIT001';
-  });
+  const isTeacher = userRole === 'STAFF' || userRole === 'EMPLOYEE' || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+  const isStudent = userRole === 'STUDENT';
 
+  // Strictly bind active student persona to authenticated session.
+  // Students can NEVER switch personas or take an exam for another student.
   const activeStudentProfile = React.useMemo(() => {
-    const found = registeredStudentsList.find(
-      s => s.id.toLowerCase() === selectedStudentId.toLowerCase() ||
-           s.admissionNo.toLowerCase() === selectedStudentId.toLowerCase() ||
-           s.name.toLowerCase() === selectedStudentId.toLowerCase()
-    );
-    return found || currentStudent || registeredStudentsList[0];
-  }, [registeredStudentsList, selectedStudentId, currentStudent]);
+    if (isStudent && currentStudent) return currentStudent;
+    if (isStudent && currentUser?.id) {
+      const found = registeredStudentsList.find(
+        s => s.id.toLowerCase() === currentUser.id.toLowerCase() ||
+             s.admissionNo.toLowerCase() === currentUser.id.toLowerCase() ||
+             s.name.toLowerCase() === currentUser.name.toLowerCase()
+      );
+      if (found) return found;
+    }
+    return null;
+  }, [isStudent, currentStudent, currentUser, registeredStudentsList]);
 
   const studentClass = String(activeStudentProfile?.classGrade || '12').trim();
   const studentStream = String(activeStudentProfile?.section || (studentClass === '10' ? 'A' : 'Science')).trim();
-  const effectiveUserId = activeStudentProfile?.id || currentUser.id;
-  const effectiveUserName = activeStudentProfile?.name || currentUser.name;
-    const scrollToQuizSection = () => {
+  const effectiveUserId = isStudent ? (activeStudentProfile?.admissionNo || activeStudentProfile?.id || currentUser.id) : '';
+  const effectiveUserName = isStudent ? (activeStudentProfile?.name || currentUser.name) : currentUser.name;
+
+  const scrollToQuizSection = () => {
     const el = document.getElementById('sathi-quiz-tab-content');
     if (el) {
       const yOffset = -90;
@@ -127,7 +132,6 @@ export const SathiQuizPage: React.FC<SathiQuizPageProps> = ({
       window.scrollTo({ top: y, behavior: 'smooth' });
     }
   };
-  const isTeacher = userRole === 'STAFF' || userRole === 'EMPLOYEE' || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
   const [activeTab, setActiveTab] = useState<'weekly' | 'practice' | 'results' | 'syllabus' | 'analytics'>(() => {
     return (userRole === 'STAFF' || userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') ? 'analytics' : 'weekly';
   });
@@ -153,8 +157,8 @@ export const SathiQuizPage: React.FC<SathiQuizPageProps> = ({
 
   // Load initial data and check for in-progress attempt (refresh recovery)
   useEffect(() => {
-    // Teachers and staff when viewing analytics tab
-    if (isTeacher && activeTab === 'analytics') {
+    // Teachers and staff do NOT take student quizzes
+    if (isTeacher || !isStudent) {
       sathiQuizService.clearStaffAttempts();
       setActiveAttempt(null);
       setTakingConfig(null);
@@ -203,7 +207,7 @@ export const SathiQuizPage: React.FC<SathiQuizPageProps> = ({
 
     window.addEventListener('smartx-quiz-reset', handleQuizReset);
     return () => window.removeEventListener('smartx-quiz-reset', handleQuizReset);
-  }, [effectiveUserId, effectiveUserName, isTeacher, studentClass, activeTab]);
+  }, [effectiveUserId, effectiveUserName, isTeacher, isStudent, studentClass, activeTab]);
 
     // Auto-launch quiz if directed from Study Sathi AI assistant
   useEffect(() => {
@@ -272,15 +276,15 @@ export const SathiQuizPage: React.FC<SathiQuizPageProps> = ({
     }
   }, [currentUser.id, currentUser.name, isTeacher]);
 
-  // Start Official Weekly Test
+  // Start Official Weekly Test (Strictly Enrolled Students Only)
   const handleStartOfficialQuiz = () => {
-    if (isTeacher || !currentWeekConfig) return;
-    const { config, questions } = sathiQuizService.getOfficialWeeklyQuiz(currentUser.id, studentClass);
+    if (isTeacher || !isStudent || !currentWeekConfig || !effectiveUserId) return;
+    const { config, questions } = sathiQuizService.getOfficialWeeklyQuiz(effectiveUserId, studentClass);
 
     const isReQuizActive = sathiQuizService.isReQuizActive(config.quizId);
     const { attempt } = sathiQuizService.startOrResumeAttempt(
-      currentUser.id,
-      currentUser.name,
+      effectiveUserId,
+      effectiveUserName,
       config.quizId,
       config.durationMinutes,
       false,
@@ -294,9 +298,9 @@ export const SathiQuizPage: React.FC<SathiQuizPageProps> = ({
     setViewingResult(null);
   };
 
-  // Start Custom Practice Mock
+  // Start Custom Practice Mock (Strictly Enrolled Students Only)
   const handleStartPracticeQuiz = () => {
-    if (isTeacher) return;
+    if (isTeacher || !isStudent || !effectiveUserId) return;
     const practice = sathiQuizService.generatePracticeQuiz(
       practiceSubject,
       'Practice Mock',
@@ -309,8 +313,8 @@ export const SathiQuizPage: React.FC<SathiQuizPageProps> = ({
       weekId: 'practice',
       title: practice.title,
       subtitle: 'Self-paced practice mock',
-      classGrade: '12',
-      stream: 'Science',
+      classGrade: studentClass,
+      stream: studentStream,
       dateDisplay: new Date().toLocaleDateString(),
       totalQuestions: practice.questions.length,
       durationMinutes: Math.round(practice.questions.length * 1.5),
@@ -334,8 +338,8 @@ export const SathiQuizPage: React.FC<SathiQuizPageProps> = ({
     };
 
     const { attempt } = sathiQuizService.startOrResumeAttempt(
-      currentUser.id,
-      currentUser.name,
+      effectiveUserId,
+      effectiveUserName,
       practice.practiceId,
       practiceConfig.durationMinutes,
       true,
@@ -351,20 +355,20 @@ export const SathiQuizPage: React.FC<SathiQuizPageProps> = ({
 
   // Autosave answers during attempt
   const handleAutosaveAnswers = (answers: Record<string, string>) => {
-    if (!activeAttempt) return;
-    sathiQuizService.autosaveAttemptProgress(activeAttempt.attemptId, currentUser.id, answers);
+    if (!activeAttempt || !effectiveUserId) return;
+    sathiQuizService.autosaveAttemptProgress(activeAttempt.attemptId, effectiveUserId, answers);
   };
 
   // Submit test answers authoritative evaluation
   const handleSubmitQuiz = async (answers: Record<string, string>, timeTakenSeconds: number) => {
-    if (!takingConfig) return;
+    if (!takingConfig || !effectiveUserId || isTeacher || !isStudent) return;
 
     const isReQuiz = !isPracticeMode && sathiQuizService.isReQuizActive(takingConfig.quizId);
 
     const result = await sathiQuizService.submitQuizAttempt(
       {
         quizId: takingConfig.quizId,
-        studentId: currentUser.id,
+        studentId: effectiveUserId,
         attemptId: activeAttempt?.attemptId,
         answers,
         timeTakenSeconds,
@@ -372,9 +376,9 @@ export const SathiQuizPage: React.FC<SathiQuizPageProps> = ({
         attemptType: isReQuiz ? 'RE_QUIZ' : 'OFFICIAL'
       },
       {
-        name: currentUser.name,
-        classGrade: takingConfig.classGrade || '12',
-        stream: takingConfig.stream || 'Science'
+        name: effectiveUserName,
+        classGrade: takingConfig.classGrade || studentClass,
+        stream: takingConfig.stream || studentStream
       }
     );
 
@@ -403,13 +407,13 @@ export const SathiQuizPage: React.FC<SathiQuizPageProps> = ({
   };
 
   // If currently taking test, render the dual-pane exam screen
-  if (!isTeacher && takingConfig && takingQuestions && activeAttempt) {
+  if (isStudent && !isTeacher && takingConfig && takingQuestions && activeAttempt) {
     return (
       <QuizTakingView
         config={takingConfig}
         questions={takingQuestions}
-        studentId={currentUser.id}
-        studentName={currentUser.name}
+        studentId={effectiveUserId}
+        studentName={effectiveUserName}
         isPractice={isPracticeMode}
         attempt={activeAttempt}
         onAutosaveAnswers={handleAutosaveAnswers}
@@ -465,7 +469,7 @@ export const SathiQuizPage: React.FC<SathiQuizPageProps> = ({
             </p>
           </div>
 
-          {!isTeacher && currentWeekConfig && !hasAttemptedOfficial && (
+          {!isTeacher && isStudent && currentWeekConfig && !hasAttemptedOfficial && (
             <button
               onClick={handleStartOfficialQuiz}
               className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-sm shadow-xl shadow-cyan-500/20 transition-all active:scale-95 whitespace-nowrap self-start md:self-auto"
@@ -520,68 +524,70 @@ export const SathiQuizPage: React.FC<SathiQuizPageProps> = ({
       </div>
 
 
-      {/* Registered Student Persona Selector (All 7 registered students can take quiz) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-slate-900/90 via-[#0A0E17] to-[#0A0E17] border border-white/[0.08] shadow-sm">
-        <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-300 font-bold">
-            {activeStudentProfile.name.charAt(0)}
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-300 font-semibold">Active Student Persona:</span>
-              <span className="text-xs font-bold text-white font-mono bg-white/10 px-2 py-0.5 rounded-md border border-white/10">
-                {activeStudentProfile.name}
-              </span>
-              <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
-                studentClass === '10'
-                  ? 'bg-purple-500/20 border-purple-500/40 text-purple-300'
-                  : 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300'
-              }`}>
-                Grade {studentClass}-{studentStream} • Roll #{activeStudentProfile.rollNo}
-              </span>
+            {/* Session Identity & Security Enclosure */}
+      {isStudent && activeStudentProfile ? (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-slate-900/90 via-[#0A0E17] to-[#0A0E17] border border-white/[0.08] shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <div className="h-9 w-9 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-300 font-bold text-sm">
+              {activeStudentProfile.name.charAt(0)}
             </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              Admission #{activeStudentProfile.admissionNo} • Questions & syllabus mapped directly to CBSE Class {studentClass}.
-            </p>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-slate-300 font-semibold">Enrolled Student:</span>
+                <span className="text-xs font-bold text-white font-mono bg-white/10 px-2 py-0.5 rounded-md border border-white/10">
+                  {activeStudentProfile.name}
+                </span>
+                <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+                  studentClass === '10'
+                    ? 'bg-purple-500/20 border-purple-500/40 text-purple-300'
+                    : 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300'
+                }`}>
+                  Grade {studentClass}-{studentStream} • Roll #{activeStudentProfile.rollNo || '01'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Admission #{activeStudentProfile.admissionNo || activeStudentProfile.id} • Syllabus & assessment mapped directly to CBSE Class {studentClass}.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-mono font-semibold">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              <span>Session Locked to Student</span>
+            </div>
           </div>
         </div>
-
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[10px] uppercase font-mono text-slate-400 mr-1 flex items-center gap-1">
-            <Users className="h-3 w-3 text-cyan-400" /> Switch Student:
-          </span>
-          {registeredStudentsList.map((std: any) => {
-            const isSelected = std.id.toLowerCase() === selectedStudentId.toLowerCase();
-            return (
-              <button
-                key={std.id}
-                type="button"
-                onClick={() => {
-                  setSelectedStudentId(std.id);
-                  setTakingConfig(null);
-                  setTakingQuestions(null);
-                  setActiveAttempt(null);
-                  setViewingResult(null);
-                }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-mono transition-all border flex items-center gap-1 ${
-                  isSelected
-                    ? (std.classGrade === '10'
-                        ? 'bg-purple-600 border-purple-400 text-white font-bold shadow-md shadow-purple-600/25'
-                        : 'bg-cyan-600 border-cyan-400 text-white font-bold shadow-md shadow-cyan-600/25')
-                    : 'bg-white/[0.04] border-white/10 text-slate-300 hover:text-white hover:bg-white/[0.08]'
-                }`}
-              >
-                <span>{std.name}</span>
-                <span className={`text-[9px] px-1 py-0.2 rounded ${
-                  isSelected ? 'bg-white/25 text-white' : 'bg-white/5 text-slate-400'
-                }`}>
-                  {std.classGrade}th
+      ) : (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-slate-900/90 via-[#0A0E17] to-[#0A0E17] border border-cyan-500/20 shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <div className="h-9 w-9 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-300 font-bold text-sm">
+              {(currentUser.name || 'F').charAt(0)}
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-slate-300 font-semibold">Faculty / Administrator:</span>
+                <span className="text-xs font-bold text-white font-mono bg-white/10 px-2 py-0.5 rounded-md border border-white/10">
+                  {currentUser.name}
                 </span>
-              </button>
-            );
-          })}
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border bg-purple-500/20 border-purple-500/40 text-purple-300">
+                  {userRole || 'FACULTY SUPERVISOR'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Academic supervision mode • Read-only access to marksheet analytics, syllabus management, and student rankings.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-xs font-mono font-semibold">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              <span>Supervisor Mode (Exams Disabled)</span>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       <div id="sathi-quiz-tab-content">
         {/* TAB 1: WEEKLY CHALLENGE */}
@@ -710,7 +716,7 @@ export const SathiQuizPage: React.FC<SathiQuizPageProps> = ({
                 }
 
                 const targetQuizId = currentWeekConfig?.quizId || OFFICIAL_WEEKLY_QUIZ_CONFIG.quizId;
-                const studentBundle = sathiQuizService.getStudentResults(currentUser.id, targetQuizId);
+                const studentBundle = sathiQuizService.getStudentResults(effectiveUserId, targetQuizId);
                 const isReQuizOpen = studentBundle.isReQuizActive;
                 const officialResult = studentBundle.officialResult;
                 const reQuizResult = studentBundle.reQuizResult;
@@ -913,7 +919,18 @@ export const SathiQuizPage: React.FC<SathiQuizPageProps> = ({
 
                 <div className="flex items-center gap-3">
                   {(() => {
-                    const bundle = sathiQuizService.getStudentResults(currentUser.id, currentWeekConfig?.quizId || '');
+                    if (isTeacher || !isStudent) {
+                      return (
+                        <button
+                          onClick={() => setActiveTab('analytics')}
+                          className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/20 transition-all active:scale-95"
+                        >
+                          <BarChart3 className="h-4 w-4" />
+                          <span>Supervise Student Submissions</span>
+                        </button>
+                      );
+                    }
+                    const bundle = sathiQuizService.getStudentResults(effectiveUserId, currentWeekConfig?.quizId || '');
                     if (bundle.isReQuizActive && !bundle.reQuizResult) {
                       return (
                         <button
@@ -1202,13 +1219,20 @@ export const SathiQuizPage: React.FC<SathiQuizPageProps> = ({
             </div>
 
             <div className="pt-4 border-t border-white/[0.06] flex justify-end">
-              <button
-                onClick={handleStartPracticeQuiz}
-                className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/20 transition-all active:scale-95"
-              >
-                <Play className="h-4 w-4 fill-current" />
-                <span>Launch Practice Test</span>
-              </button>
+              {isTeacher || !isStudent ? (
+                <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-xs font-mono">
+                  <ShieldCheck className="h-4 w-4" />
+                  <span>Faculty Mode: Practice mocks can only be initiated by enrolled students.</span>
+                </div>
+              ) : (
+                <button
+                  onClick={handleStartPracticeQuiz}
+                  className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/20 transition-all active:scale-95"
+                >
+                  <Play className="h-4 w-4 fill-current" />
+                  <span>Launch Practice Test</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
