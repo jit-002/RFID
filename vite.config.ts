@@ -1,3 +1,9 @@
+import healthHandler from './api/ai/health';
+import studySathiHandler from './api/ai/study-sathi';
+import pvmSathiHandler from './api/ai/pvm-sathi';
+import sathiCreativeGenerateHandler from './api/sathi-creative/generate';
+import sathiCreativeEditHandler from './api/sathi-creative/edit';
+import sathiCreativeAnalyzeHandler from './api/sathi-creative/analyze';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { AttendanceSyncEngine } from './src/services/attendanceSyncEngine';
@@ -455,58 +461,24 @@ export default defineConfig(({ mode }) => {
               return sendJson(200, { success: true, user: found });
             }
 
-            // 9. Sathi Creative Cloudflare Worker Image Proxy: POST /api/sathi-creative/generate
-            if (pathname === '/api/sathi-creative/generate' && req.method === 'POST') {
-              try {
-                const body = await parseBody();
-                const prompt = body.prompt || '';
-                if (!prompt) {
-                  return sendJson(400, { error: 'Prompt is required' });
-                }
-
-                const workerUrl = process.env.SATHI_IMAGE_WORKER_URL || 'https://smartx.jitdas002-j.workers.dev';
-                const workerToken = process.env.SATHI_IMAGE_WORKER_TOKEN || '12345678';
-
-                const abortController = new AbortController();
-                const timeoutId = setTimeout(() => abortController.abort(), 90000);
-
-                const cfResponse = await fetch(workerUrl, {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${workerToken}`,
-                    'Content-Type': 'application/json'
-                  },
-                  body: JSON.stringify({ prompt }),
-                  signal: abortController.signal
-                });
-
-                clearTimeout(timeoutId);
-
-                if (!cfResponse.ok) {
-                  const errText = await cfResponse.text().catch(() => '');
-                  return sendJson(cfResponse.status, { error: 'Cloudflare worker generation failed', details: errText });
-                }
-
-                const contentType = cfResponse.headers.get('content-type') || '';
-                if (!contentType.startsWith('image/')) {
-                  return sendJson(502, { error: 'Worker returned non-image content type', contentType });
-                }
-
-                const arrayBuffer = await cfResponse.arrayBuffer();
-                if (!arrayBuffer || arrayBuffer.byteLength < 500) {
-                  return sendJson(502, { error: 'Worker returned empty or invalid image binary' });
-                }
-
-                res.writeHead(200, {
-                  'Content-Type': contentType,
-                  'Content-Length': arrayBuffer.byteLength,
-                  'Access-Control-Allow-Origin': '*'
-                });
-                res.end(Buffer.from(arrayBuffer));
-                return;
-              } catch (err: any) {
-                return sendJson(500, { error: err.message || 'Worker proxy request failed' });
-              }
+            // Shared Production API Handlers: Dev-Prod Parity
+            if (pathname === '/api/ai/health') {
+              return healthHandler(req, res);
+            }
+            if (pathname === '/api/ai/study-sathi') {
+              return studySathiHandler(req, res);
+            }
+            if (pathname === '/api/ai/pvm-sathi') {
+              return pvmSathiHandler(req, res);
+            }
+            if (pathname === '/api/sathi-creative/generate') {
+              return sathiCreativeGenerateHandler(req, res);
+            }
+            if (pathname === '/api/sathi-creative/edit') {
+              return sathiCreativeEditHandler(req, res);
+            }
+            if (pathname === '/api/sathi-creative/analyze') {
+              return sathiCreativeAnalyzeHandler(req, res);
             }
 
             next();

@@ -38,6 +38,7 @@ import {
   Zap,
   ImageIcon
 } from 'lucide-react';
+import { SmartXAiApiClient } from '../services/api/aiApi';
 import { studySathiService } from '../services/studySathiService';
 
 interface AdminDashboardProps {
@@ -285,6 +286,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
   const [localOpenaiKey, setLocalOpenaiKey] = useState(openaiApiKey);
   const [localCustomEndpoint, setLocalCustomEndpoint] = useState(customAiEndpoint);
   const [aiTestState, setAiTestState] = useState<Record<string, { loading: boolean; success?: boolean; latencyMs?: number; message?: string }>>({});
+  const [aiHealthReport, setAiHealthReport] = useState<any>(null);
+  const [isRefreshingHealth, setIsRefreshingHealth] = useState<boolean>(false);
+
+  const refreshAiHealth = React.useCallback(async () => {
+    setIsRefreshingHealth(true);
+    try {
+      const health = await SmartXAiApiClient.getAiHealth();
+      setAiHealthReport(health);
+    } catch {
+      // Degraded fallback
+    } finally {
+      setIsRefreshingHealth(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    refreshAiHealth();
+  }, [refreshAiHealth]);
 
   React.useEffect(() => {
     setLocalStudySathiKey(studySathiApiKey);
@@ -351,7 +370,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       openaiApiKey: localOpenaiKey.trim(),
       customAiEndpoint: localCustomEndpoint.trim()
     });
-    addToast('AI Engines Saved', 'API keys and neural inference parameters updated successfully.', 'SUCCESS');
+    addToast('Configuration Saved Securely', 'AI inference and provider parameters updated securely.', 'SUCCESS');
+    refreshAiHealth();
   };
 
   // Rules form state
@@ -1120,6 +1140,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                   >
                     <Sparkles className="h-3.5 w-3.5" />
                     <span>Launch Study Sathi 2.0 →</span>
+                  </button>
+                  <button
+                    onClick={refreshAiHealth}
+                    disabled={isRefreshingHealth}
+                    className="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 flex items-center gap-1.5 transition-all"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${isRefreshingHealth ? 'animate-spin' : ''}`} />
+                    <span>{isRefreshingHealth ? 'Checking...' : 'Refresh Health'}</span>
                   </button>
                   <button
                     onClick={handleSaveAiConfig}

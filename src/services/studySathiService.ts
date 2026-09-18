@@ -1,3 +1,4 @@
+import { SmartXAiApiClient } from './api/aiApi';
 import {
   generateFormulaSheetImage,
   isFormulaSheetQuery,
@@ -344,7 +345,7 @@ export interface AiProviderConfig {
   priority: number;
 }
 
-const defaultGeminiKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) || "";
+const defaultGeminiKey = '';
 
 export const AI_PROVIDERS: AiProviderConfig[] = [
   {
@@ -1020,182 +1021,78 @@ MISSION & TEACHING PRINCIPLES:
     let failedDueToNetwork = false;
 
     // Try keys sequentially on rate limits / quota issues
-    for (let pIdx = 0; pIdx < candidateKeys.length; pIdx++) {
-      const currentKey = candidateKeys[pIdx];
+    try {
+      const apiRes = await SmartXAiApiClient.askStudySathi({
+        query: userPromptText,
+        history: history.map(h => ({ role: h.role, text: h.text })),
+        files,
+        images,
+        documents,
+        modelId: primaryApiModel,
+        studentName,
+        classGrade
+      });
 
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${primaryApiModel}:generateContent?key=${currentKey}`;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 45000);
-
-        if (signal) {
-          signal.addEventListener('abort', () => controller.abort());
+      if (apiRes.success && apiRes.text) {
+        let clean = apiRes.text.trim().replace(/^Jai\s+Guru[,\s!:-]*/gi, '').trim();
+        if (/\([A-D]\)[^\n]*\((?:correct answer|answer)\)/i.test(clean)) {
+          clean = clean.replace(/\s*\((?:correct answer|correct|answer)\)/gi, '');
         }
 
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: formattedContents,
-            generationConfig: {
-              temperature: 0.25,
-              maxOutputTokens: 8192
-            }
-          }),
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-
-        if (res.ok) {
-          const data = await res.json();
-          const candidate = data.candidates?.[0];
-          const candidateText = candidate?.content?.parts?.[0]?.text;
-
-          if (candidateText && candidateText.trim()) {
-            let clean = candidateText.trim().replace(/^Jai\s+Guru[,\s!:-]*/gi, '').trim();
-            // Sanitize accidental (Correct Answer) leaks from options during quiz generations
-            if (/\([A-D]\)[^\n]*\((?:correct answer|answer)\)/i.test(clean)) {
-              clean = clean.replace(/\s*\((?:correct answer|correct|answer)\)/gi, '');
-            }
-
-            const finishReason = candidate.finishReason;
-            const isTruncated = finishReason === 'MAX_TOKENS' || finishReason === 'LENGTH';
-
-            // User-facing branding (Requirement 14, 16 & 47)
-            const modelDisplayName = (academicReq.intent === 'VISION' || (images && images.length > 0) || (documents && documents.length > 0))
-              ? 'Study Sathi Vision'
-              : (taskRoute.level >= 3 ? 'Study Sathi Pro' : 'Study Sathi');
-
-            return {
-              answer: clean,
-              modelUsed: modelDisplayName,
-              confidence: 0.99,
-              modelSwitchedNotice: undefined, // Failover silently without leaking internal provider names!
-              messageType: academicReq.intent,
-              isTruncated
-            };
-          }
-        } else {
-          const errData = await res.json().catch(() => ({}));
-          const errMsg = errData?.error?.message || `HTTP ${res.status}`;
-          lastError = new Error(errMsg);
-
-          // If rate limited or quota exceeded (429 / RESOURCE_EXHAUSTED), proceed to next failover key
-          if (res.status === 429 || errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('quota') || res.status >= 500) {
-            failedDueToRateLimit = true;
-            console.warn(`Gemini Provider ${pIdx + 1} rate limited / exhausted (${errMsg}), failing over to next key...`);
-            continue;
-          } else if (res.status === 400 || res.status === 401 || res.status === 403 || errMsg.includes('API key')) {
-            failedDueToKey = true;
-            console.warn(`Gemini Provider ${pIdx + 1} auth/key issue (${errMsg}), failing over to next key...`);
-            continue;
-          }
-        }
-      } catch (err: any) {
-        if (signal?.aborted || err.name === 'AbortError') {
-          throw new StudySathiError({
-            success: false,
-            errorCode: 'ABORTED',
-            userMessage: 'Generation stopped by user.',
-            retryable: false
-          });
-        }
-        failedDueToNetwork = true;
-        lastError = err;
-        console.warn(`Gemini inference attempt error on provider ${pIdx + 1}:`, err);
+        return {
+          answer: clean,
+          modelSwitchedNotice: switchedNotice,
+          modelUsed: apiRes.modelUsed || primaryApiModel,
+          confidence: 0.98,
+          messageType: 'ACADEMIC_CHAT' as MessageIntent
+        };
       }
-    }
 
-    // Return structured, helpful error instead of generic "Failed to fetch"
-    let structuredErr: StructuredAiError;
-    if (failedDueToRateLimit) {
-      structuredErr = {
+      throw new StudySathiError({
         success: false,
-        errorCode: 'ALL_PROVIDERS_FAILED',
-        userMessage: 'Study Sathi is temporarily busy with high demand across providers. Please try again in a moment.',
-        provider: 'google-gemini',
-        model: primaryApiModel,
-        retryable: true
-      };
-    } else if (failedDueToKey) {
-      structuredErr = {
-        success: false,
-        errorCode: 'INVALID_API_KEY',
-        userMessage: 'An AI provider is incorrectly configured. Please check provider keys in the Admin Panel.',
-        provider: 'google-gemini',
-        model: primaryApiModel,
-        retryable: false
-      };
-    } else if (failedDueToNetwork) {
-      structuredErr = {
-        success: false,
-        errorCode: 'NETWORK_ERROR',
-        userMessage: 'Connection to the AI service failed. Please check your internet connection or try again.',
-        provider: 'google-gemini',
-        model: primaryApiModel,
-        retryable: true
-      };
-    } else {
-      structuredErr = {
-        success: false,
+        userMessage: apiRes.error || 'Study Sathi could not generate a response.',
         errorCode: 'SERVICE_UNAVAILABLE',
-        userMessage: `Study Sathi is temporarily unavailable (${lastError?.message || 'Inference engine issue'}). Please try again.`,
-        provider: 'google-gemini',
-        model: primaryApiModel,
         retryable: true
-      };
+      });
+    } catch (err: any) {
+      if (err instanceof StudySathiError) throw err;
+      throw new StudySathiError({
+        success: false,
+        userMessage: err.message || 'Study Sathi connection failed.',
+        errorCode: 'NETWORK_ERROR',
+        retryable: true
+      });
     }
-
-    throw new StudySathiError(structuredErr);
   }
 
   // Health Diagnostics
-  public async testConnection(apiKey?: string, model: string = 'gemini-3.6-flash'): Promise<{ success: boolean; latencyMs: number; message: string }> {
-    const key = apiKey || AI_PROVIDERS[0]?.apiKey;
+  public async testConnection(_apiKey?: string, _model: string = 'gemini-3.6-flash'): Promise<{ success: boolean; latencyMs: number; message: string }> {
     const start = Date.now();
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: 'Ping test. Reply with PONG.' }] }],
-          generationConfig: { maxOutputTokens: 10 }
-        })
-      });
-
+      const health = await SmartXAiApiClient.getAiHealth();
       const latencyMs = Date.now() - start;
-      if (res.ok) {
-        return { success: true, latencyMs, message: `Active & Healthy (${latencyMs}ms latency on ${model})` };
-      } else {
-        const errJson = await res.json().catch(() => ({}));
-        return { success: false, latencyMs, message: errJson?.error?.message || `HTTP ${res.status} Error` };
+      const provider = health.providers?.find(p => p.id === 'study-sathi-gemini') || health.providers?.[0];
+      if (provider && provider.healthy) {
+        return { success: true, latencyMs: provider.latencyMs || latencyMs, message: `Active & Healthy (${provider.latencyMs || latencyMs}ms latency)` };
       }
+      return { success: false, latencyMs, message: 'AI provider is not configured or offline' };
     } catch (e: any) {
       const latencyMs = Date.now() - start;
-      return { success: false, latencyMs, message: e?.message || 'Network connection failed' };
+      return { success: false, latencyMs, message: e?.message || 'Health check failed' };
     }
   }
 
-  // Multimodal Vision Diagnostic
-  public async testVisionConnection(apiKey?: string): Promise<{ success: boolean; latencyMs: number; message: string }> {
-    const key = apiKey || AI_PROVIDERS[0]?.apiKey;
+  // Multimodal Vision Diagnostic (Routed server-side through /api/sathi-creative/analyze)
+  public async testVisionConnection(_apiKey?: string): Promise<{ success: boolean; latencyMs: number; message: string }> {
     const start = Date.now();
     try {
       const pixelB64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${key}`;
-      const res = await fetch(url, {
+      const res = await fetch('/api/sathi-creative/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{
-            role: 'user',
-            parts: [
-              { text: 'Describe what you see in one word.' },
-              { inlineData: { mimeType: 'image/png', data: pixelB64 } }
-            ]
-          }],
-          generationConfig: { maxOutputTokens: 15 }
+          image: pixelB64,
+          query: 'Test connection'
         })
       });
 
@@ -1204,7 +1101,7 @@ MISSION & TEACHING PRINCIPLES:
         return { success: true, latencyMs, message: `Vision Multimodal Online (${latencyMs}ms latency)` };
       } else {
         const errJson = await res.json().catch(() => ({}));
-        return { success: false, latencyMs, message: errJson?.error?.message || `HTTP ${res.status} Error` };
+        return { success: false, latencyMs, message: errJson?.message || `HTTP ${res.status} Error` };
       }
     } catch (e: any) {
       const latencyMs = Date.now() - start;

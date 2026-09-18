@@ -356,18 +356,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const dismissLiveSyncPopout = useCallback(() => setLiveSyncPopout(null), []);
 
   // AI Provider Configurations (PVM Sathi, Study Sathi 2.0, Claude, OpenAI)
-  const [studySathiApiKey, setStudySathiApiKey] = useState<string>(() => {
-    return loadStoredData<string>('smartx_study_sathi_api_key', import.meta.env.VITE_GEMINI_API_KEY || '');
-  });
-  const [pvmSathiApiKey, setPvmSathiApiKey] = useState<string>(() => {
-    return loadStoredData<string>('smartx_pvm_sathi_api_key', '');
-  });
-  const [claudeApiKey, setClaudeApiKey] = useState<string>(() => {
-    return loadStoredData<string>('smartx_claude_api_key', '');
-  });
-  const [openaiApiKey, setOpenaiApiKey] = useState<string>(() => {
-    return loadStoredData<string>('smartx_openai_api_key', '');
-  });
+  const [studySathiApiKey, setStudySathiApiKey] = useState<string>('');
+  const [pvmSathiApiKey, setPvmSathiApiKey] = useState<string>('');
+  const [claudeApiKey, setClaudeApiKey] = useState<string>('');
+  const [openaiApiKey, setOpenaiApiKey] = useState<string>('');
+
+  useEffect(() => {
+    try {
+      localStorage.removeItem('smartx_study_sathi_api_key');
+      localStorage.removeItem('smartx_pvm_sathi_api_key');
+      localStorage.removeItem('smartx_claude_api_key');
+      localStorage.removeItem('smartx_openai_api_key');
+    } catch {}
+  }, []);
+
   const [customAiEndpoint, setCustomAiEndpoint] = useState<string>(() => {
     return loadStoredData<string>('smartx_custom_ai_endpoint', '');
   });
@@ -381,19 +383,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }) => {
     if (config.studySathiApiKey !== undefined) {
       setStudySathiApiKey(config.studySathiApiKey);
-      saveStoredData('smartx_study_sathi_api_key', config.studySathiApiKey);
+      // Key persisted server-side; not stored in client localStorage
     }
     if (config.pvmSathiApiKey !== undefined) {
       setPvmSathiApiKey(config.pvmSathiApiKey);
-      saveStoredData('smartx_pvm_sathi_api_key', config.pvmSathiApiKey);
+      // Key persisted server-side; not stored in client localStorage
     }
     if (config.claudeApiKey !== undefined) {
       setClaudeApiKey(config.claudeApiKey);
-      saveStoredData('smartx_claude_api_key', config.claudeApiKey);
+      // Key persisted server-side; not stored in client localStorage
     }
     if (config.openaiApiKey !== undefined) {
       setOpenaiApiKey(config.openaiApiKey);
-      saveStoredData('smartx_openai_api_key', config.openaiApiKey);
+      // Key persisted server-side; not stored in client localStorage
     }
     if (config.customAiEndpoint !== undefined) {
       setCustomAiEndpoint(config.customAiEndpoint);
@@ -2177,31 +2179,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Google OAuth with Strict Roster Check
   const loginWithGoogleOAuth = async (): Promise<{ success: boolean; notRegistered?: boolean; email?: string; error?: string }> => {
-    // Attempt Supabase Google OAuth
+    // Attempt real Supabase Google OAuth with account chooser
     const res = await signInWithGoogle();
     if (!res.success) {
-      // Prompt user for demo Google test simulation if Supabase popup is blocked or in dev
-      const testEmail = prompt('Enter your Google email for institutional verification (e.g. jit.das@pvmlumding.edu or admin@pvmlumding.edu):', 'jit.das@pvmlumding.edu');
-      if (!testEmail) return { success: false };
-
-      const match = await SupabaseDatabaseService.matchUserByEmail(
-        testEmail,
-        generatedCredentials,
-        students,
-        staff,
-        employees
-      );
-
-      if (match.matched && match.role) {
-        setUserRole(match.role);
-        setIsAuthenticated(true);
-        addToast('Google Sign In Verified', `Authenticated as ${match.name || testEmail} (${match.role})`, 'SUCCESS');
-        return { success: true };
-      } else {
-        // User not in database: do NOT give admin access!
-        setUnregisteredGoogleEmail(testEmail);
-        return { success: false, notRegistered: true, email: testEmail };
-      }
+      addToast('Google Sign In Error', res.error || 'Google sign-in could not be completed. Please try again.', 'ERROR');
+      return { success: false, error: res.error };
     }
     return { success: true };
   };

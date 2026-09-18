@@ -426,18 +426,37 @@ export class SathiCreativeEngine {
       ? crypto.randomUUID()
       : (`imggen_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
 
+    const promptLower = (request.prompt || '').toLowerCase();
+    const hasFormulaKeywords = /\b(formula sheet|cheat sheet|revision sheet|study notes|formulas sheet|formula list)\b/i.test(request.prompt);
+    const hasAcademicKeywords = /\b(relations and functions|matrices|determinants|calculus|integration|differentiation|inverse trigonometric)\b/i.test(request.prompt);
+
+    // Strict Generic / Artistic detection (PHASE 12 & 30 Firewall)
+    const isGenericArtistic = !hasFormulaKeywords && !hasAcademicKeywords && (
+      /\b(apple|red apple|fruit|cat|dog|car|tree|person|landscape|sun|sky|sunset|portrait|drawing|artwork|scenery|flower|house|building|robot|animal|white background)\b/i.test(request.prompt) ||
+      /\b(completely\s+new\s+image|new\s+image|photo\s+of|picture\s+of)\b/i.test(request.prompt)
+    );
+
+    const isExplicitlyEducational = !isGenericArtistic && Boolean(
+      request.mode === 'EDUCATIONAL_SHEET' ||
+      hasFormulaKeywords ||
+      hasAcademicKeywords ||
+      request.intent?.isEducational
+    );
+
     const mode: SathiCreativeMode = request.mode || (
       request.intent?.subIntent === 'EDIT_IMAGE'
         ? 'EDIT_IMAGE'
         : request.intent?.subIntent === 'TRANSFORM_CONTENT'
         ? 'TRANSFORM_CONTENT'
-        : (request.intent?.isEducational || request.subject !== null && request.subject !== 'General')
+        : isExplicitlyEducational
         ? 'EDUCATIONAL_SHEET'
         : 'NEW_IMAGE'
     );
 
     const isEducational = mode === 'EDUCATIONAL_SHEET';
-    const finalPrompt = buildSathiCreativePrompt({ ...request, mode, isEducational });
+    const finalPrompt = isGenericArtistic 
+      ? request.prompt.trim() 
+      : buildSathiCreativePrompt({ ...request, mode, isEducational });
 
     // Deterministic Request Hash (Section: REQUEST HASH)
     const norm = `${mode}|${request.subject || ''}|${request.topic || ''}|${request.classLevel || ''}|${request.style || ''}|${request.format || ''}|${request.prompt.slice(0, 100)}`;
@@ -455,11 +474,21 @@ export class SathiCreativeEngine {
     console.log('[StudySathi][RequestHash]', requestHash);
 
     const isFormulaSheet = (
-      mode === 'EDUCATIONAL_SHEET' ||
-      isEducational ||
-      request.precisionMode ||
-      /\b(formula sheet|study sheet|revision sheet|cheat sheet|important formulas|study notes|formula|formulas)\b/i.test(request.prompt)
+      mode === 'EDUCATIONAL_SHEET' &&
+      !isGenericArtistic &&
+      (hasFormulaKeywords || hasAcademicKeywords || request.precisionMode)
     );
+
+    // Topic resolution strictly adhering to CURRENT request topic (PHASE 12, 13, 30)
+    let activeTopic = request.topic;
+    if (!activeTopic || activeTopic === 'General') {
+      if (/determinants/i.test(request.prompt)) activeTopic = 'Determinants';
+      else if (/matrices/i.test(request.prompt)) activeTopic = 'Matrices';
+      else if (/relations\s+and\s+functions/i.test(request.prompt)) activeTopic = 'Relations and Functions';
+      else if (/integration|calculus/i.test(request.prompt)) activeTopic = 'Integration';
+      else if (/inverse\s+trig/i.test(request.prompt)) activeTopic = 'Inverse Trigonometric Functions';
+      else activeTopic = request.topic || 'Class 12 Core Topics';
+    }
 
     // =========================================================================
     // TIER 1 FOR EDUCATIONAL SHEETS: Sathi Precision Canvas Renderer
@@ -472,7 +501,7 @@ export class SathiCreativeEngine {
         const subjectCat = (request.subject?.toLowerCase() === 'chemistry' ? 'chemistry' : request.subject?.toLowerCase() === 'physics' ? 'physics' : 'mathematics') as SubjectCategory;
         const canvasDataUrl = generateFormulaSheetImage(
           subjectCat,
-          request.topic || 'Relations and Functions',
+          activeTopic,
           request.style?.includes('handwritten') || request.prompt.toLowerCase().includes('handwritten') ? 'handwritten' : 'digital',
           request.classLevel || 'Class 12'
         );
@@ -628,7 +657,10 @@ export class SathiCreativeEngine {
 
       if (proxyRes.ok) {
         const contentType = proxyRes.headers.get('content-type') || '';
-        if (contentType.startsWith('image/')) {
+        if (contentType.includes('application/json')) {
+          const data = await proxyRes.json();
+          if (data.imageUrl) return data.imageUrl;
+        } else if (contentType.startsWith('image/')) {
           const blob = await proxyRes.blob();
           if (blob && blob.size > 500) {
             return URL.createObjectURL(blob);

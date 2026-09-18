@@ -1,3 +1,4 @@
+import { SmartXAiApiClient } from './api/aiApi';
 import { Student, AttendanceRecord, Staff, Employee, UserRole, IoTDevice } from '../types';
 
 export interface ClassSummary {
@@ -27,7 +28,7 @@ export class AIIntelligenceService {
   private apiKey: string | undefined;
 
   constructor() {
-    this.apiKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) || (typeof process !== 'undefined' ? process.env?.VITE_GEMINI_API_KEY : undefined);
+    this.apiKey = undefined; // Provider keys are stored securely on the server
   }
 
   // =========================================================================
@@ -348,8 +349,8 @@ MANDATORY GREETING & STYLE RULES:
 2. When addressing a student, start directly with their first name (e.g. "${studentFirstName}! ..." or "${studentFirstName}, ...").
 3. Always provide accurate, precise, and verified facts using the live data provided above. NEVER hallucinate old numbers or make up attendance percentages.`;
 
-    // Realtime Multi-Turn Gemini Call with Memory (using verified Gemini 3.x models)
-    if (this.apiKey && this.apiKey.length > 10) {
+    // Realtime Multi-Turn AI Call via authenticated /api/ai/pvm-sathi
+    if (true) {
       const modelsToTry = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-flash-latest'];
 
       // Sanitize multi-turn history to strictly filter out cross-role statements
@@ -374,47 +375,40 @@ MANDATORY GREETING & STYLE RULES:
         }
       ];
 
-      for (const model of modelsToTry) {
-        try {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.apiKey}`;
-          const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: formattedContents,
-              generationConfig: {
-                temperature: 0.15,
-                maxOutputTokens: 600
-              }
-            })
-          });
+      try {
+        const pvmRes = await SmartXAiApiClient.askPvmSathi({
+          query,
+          history: sanitizedHistory.map(m => ({ sender: m.role === 'user' ? 'USER' : 'AI', text: m.text })),
+          attendanceContext: {
+            effectiveToday,
+            role,
+            studentName: student?.name,
+            studentId: student?.id,
+            systemInstruction
+          },
+          userRole: role
+        });
 
-          if (res.ok) {
-            const data = await res.json();
-            const candidate = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (candidate && candidate.trim()) {
-              // Strip any religious salutation prefix like "Jai Guru" so it starts directly from the name
-              const cleanAnswer = candidate
-                .trim()
-                .replace(/^Jai\s+Guru[,\s!:-]*/gi, '')
-                .replace(/\bJai\s+Guru\b[,\s!:-]*/gi, '')
-                .trim();
-              return {
-                answer: cleanAnswer,
-                dataPoints: [
-                  `Pvm Sathi Memory Active`,
-                  `Role: ${role}`,
-                  `Verified: Pranabananda Vidyamandir (${effectiveToday})`
-                ],
-                confidence: 0.99,
-                modelUsed: model,
-                isRealtime: true
-              };
-            }
-          }
-        } catch (e) {
-          console.warn(`Pvm Sathi model ${model} memory attempt:`, e);
+        if (pvmRes.success && pvmRes.text) {
+          const cleanAnswer = pvmRes.text
+            .trim()
+            .replace(/^Jai\s+Guru[,\s!:-]*/gi, '')
+            .replace(/\bJai\s+Guru\b[,\s!:-]*/gi, '')
+            .trim();
+          return {
+            answer: cleanAnswer,
+            dataPoints: [
+              `Pvm Sathi Verified`,
+              `Role: ${role}`,
+              `Campus: Pranabananda Vidyamandir (${effectiveToday})`
+            ],
+            confidence: 0.99,
+            modelUsed: pvmRes.modelUsed || 'gemini-2.5-flash-lite',
+            isRealtime: true
+          };
         }
+      } catch (e) {
+        console.warn('Pvm Sathi backend API call failed:', e);
       }
     }
 
